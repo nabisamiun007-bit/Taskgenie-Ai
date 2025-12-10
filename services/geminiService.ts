@@ -2,10 +2,12 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AIResponse, Priority } from "../types";
 
 export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> => {
-  const apiKey = process.env.API_KEY;
+  // Check for Vite env var first (standard for Vercel/Netlify deployments), then fallback to process.env
+  const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
+  
   if (!apiKey) {
-    console.error("API Key is missing in process.env.API_KEY");
-    throw new Error("API Key is missing. Please set process.env.API_KEY.");
+    console.error("API Key is missing. Please set VITE_API_KEY in your deployment settings.");
+    throw new Error("API Key is missing.");
   }
 
   // Initialize client inside the function to ensure env var is ready

@@ -4,7 +4,7 @@ import TaskCard from './components/TaskCard';
 import TaskForm from './components/TaskForm';
 import Modal from './components/Modal';
 import AuthScreen from './components/AuthScreen';
-import { Plus, Download, Upload, LayoutGrid, List as ListIcon, Search, CheckSquare, X, LogOut, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, List as ListIcon, Search, CheckSquare, X, LogOut, FileSpreadsheet, RefreshCw, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const App: React.FC = () => {
@@ -107,6 +107,15 @@ const App: React.FC = () => {
         newSet.delete(id);
         return newSet;
       });
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedTaskIds.size === 0) return;
+    
+    if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.size} selected task(s)? This action cannot be undone.`)) {
+      setTasks(prev => prev.filter(t => !selectedTaskIds.has(t.id)));
+      setSelectedTaskIds(new Set());
     }
   };
 
@@ -379,12 +388,23 @@ const App: React.FC = () => {
              </div>
 
              {selectedTaskIds.size > 0 && (
-               <button 
-                 onClick={clearSelection}
-                 className="hidden sm:flex items-center text-sm text-gray-500 hover:text-gray-700"
-               >
-                 <X size={14} className="mr-1"/> Clear ({selectedTaskIds.size})
-               </button>
+               <div className="flex items-center gap-2 mr-1">
+                   <button 
+                     onClick={handleDeleteSelected}
+                     className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all shadow-md animate-in fade-in zoom-in-95"
+                     title="Delete Selected Tasks"
+                   >
+                     <Trash2 size={16} />
+                     <span className="hidden sm:inline">Delete ({selectedTaskIds.size})</span>
+                   </button>
+                   <button 
+                     onClick={clearSelection}
+                     className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
+                     title="Clear Selection"
+                   >
+                     <X size={18} />
+                   </button>
+               </div>
              )}
 
             <button
