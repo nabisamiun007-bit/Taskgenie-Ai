@@ -1,9 +1,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AIResponse, Priority } from "../types";
 
+// Fix for "Cannot find name 'process'" in browser environments without Node types
+declare const process: any;
+
 export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> => {
-  // Check for Vite env var first (standard for Vercel/Netlify deployments), then fallback to process.env
-  const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
+  // Check for Vite env var first (standard for Vercel/Netlify deployments)
+  // We access import.meta.env safely using type casting if needed, but vite/client types in tsconfig should handle it
+  const viteEnv = (import.meta as any).env;
+  
+  // Logic: Use VITE_API_KEY if available, otherwise fallback to process.env.API_KEY (safe access)
+  const apiKey = viteEnv?.VITE_API_KEY || (typeof process !== 'undefined' ? process.env?.API_KEY : undefined);
   
   if (!apiKey) {
     console.error("API Key is missing. Please set VITE_API_KEY in your deployment settings.");
