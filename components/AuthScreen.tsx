@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { User, Mail, Lock, LogIn, UserPlus, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Lock, LogIn, UserPlus, CheckCircle2, Cloud, HardDrive } from 'lucide-react';
 import { User as UserType } from '../types';
+import { loginUser, registerUser, isCloudEnabled } from '../services/dataService';
 
 interface AuthScreenProps {
   onLogin: (user: UserType) => void;
@@ -14,49 +15,54 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleAuth = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Simulate network delay
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem('taskgenie-users') || '[]');
-
+    try {
+      let result;
       if (isLogin) {
-        const user = users.find((u: any) => u.email === email && u.password === password);
-        if (user) {
-          onLogin({ id: user.id, email: user.email, username: user.username });
-        } else {
-          setError('Invalid email or password');
-        }
+        result = await loginUser(email, password);
       } else {
-        if (users.find((u: any) => u.email === email)) {
-          setError('Email already registered');
-        } else {
-          const newUser = {
-            id: crypto.randomUUID(),
-            email,
-            username,
-            password
-          };
-          localStorage.setItem('taskgenie-users', JSON.stringify([...users, newUser]));
-          onLogin({ id: newUser.id, email: newUser.email, username: newUser.username });
-        }
+        result = await registerUser(email, password, username);
       }
+
+      if (result.error) {
+        setError(result.error);
+      } else if (result.user) {
+        onLogin(result.user);
+      }
+    } catch (err) {
+      setError('An unexpected error occurred.');
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-gradient-to-r from-primary-600 to-indigo-600 p-8 text-center text-white">
+        <div className="bg-gradient-to-r from-primary-600 to-indigo-600 p-8 text-center text-white relative">
           <div className="bg-white/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
             <CheckCircle2 size={32} />
           </div>
           <h1 className="text-3xl font-bold mb-2">TaskGenie AI</h1>
-          <p className="text-primary-100">Smart task management for everyone</p>
+          <p className="text-primary-100 mb-4">Smart task management for everyone</p>
+          
+          <div className="inline-flex items-center gap-2 bg-black/20 px-3 py-1 rounded-full text-xs font-medium">
+            {isCloudEnabled ? (
+                <>
+                    <Cloud size={12} />
+                    <span>Cloud Sync Active</span>
+                </>
+            ) : (
+                <>
+                    <HardDrive size={12} />
+                    <span>Local Mode (Device Only)</span>
+                </>
+            )}
+          </div>
         </div>
 
         <div className="p-8">
@@ -140,6 +146,13 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
               )}
             </button>
           </form>
+          
+           {!isCloudEnabled && (
+               <div className="mt-6 text-xs text-center text-gray-400 bg-gray-50 p-2 rounded border border-gray-100">
+                   <p>Note: Without Supabase keys configured,</p>
+                   <p>tasks are only saved to this device's browser.</p>
+               </div>
+           )}
         </div>
       </div>
     </div>

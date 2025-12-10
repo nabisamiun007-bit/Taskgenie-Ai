@@ -4,12 +4,14 @@ import TaskCard from './components/TaskCard';
 import TaskForm from './components/TaskForm';
 import Modal from './components/Modal';
 import AuthScreen from './components/AuthScreen';
-import { Plus, Download, Upload, LayoutGrid, List as ListIcon, Search, CheckSquare, X, LogOut, FileSpreadsheet, RefreshCw, Trash2 } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, List as ListIcon, Search, CheckSquare, X, LogOut, FileSpreadsheet, RefreshCw, Trash2, Cloud, CloudOff } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { fetchTasks, saveTask, saveAllTasks, deleteTask, deleteMultipleTasks, isCloudEnabled } from './services/dataService';
 
 const App: React.FC = () => {
   // Auth State
   const [user, setUser] = useState<User | null>(null);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   
   // App State
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -28,36 +30,34 @@ const App: React.FC = () => {
     const storedUser = localStorage.getItem('taskgenie-current-user');
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
       } catch (e) {
-        console.error("Failed to parse user session", e);
         localStorage.removeItem('taskgenie-current-user');
       }
     }
   }, []);
 
-  // Load Tasks for Current User
+  // Load Tasks whenever user logs in
   useEffect(() => {
-    if (!user) return;
-    const key = `taskgenie-tasks-${user.id}`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        setTasks(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load tasks", e);
-      }
+    if (user) {
+      loadUserData(user);
     } else {
       setTasks([]);
     }
   }, [user]);
 
-  // Save Tasks for Current User
-  useEffect(() => {
-    if (!user) return;
-    const key = `taskgenie-tasks-${user.id}`;
-    localStorage.setItem(key, JSON.stringify(tasks));
-  }, [tasks, user]);
+  const loadUserData = async (currentUser: User) => {
+    setIsLoadingTasks(true);
+    try {
+        const loadedTasks = await fetchTasks(currentUser);
+        setTasks(loadedTasks);
+    } catch (e) {
+        console.error("Failed to load tasks", e);
+    } finally {
+        setIsLoadingTasks(false);
+    }
+  };
 
   // Auth Handlers
   const handleLogin = (loggedInUser: User) => {
@@ -68,7 +68,7 @@ const App: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('taskgenie-current-user');
     setUser(null);
-    setTasks([]);
+    setTasks([]); 
     setSelectedTaskIds(new Set());
   };
 
@@ -85,23 +85,51 @@ const App: React.FC = () => {
   }, [tasks, searchQuery, statusFilter, priorityFilter]);
 
   // Handlers
-  const handleCreateOrUpdateTask = (taskData: Omit<Task, 'id' | 'createdAt'>) => {
+  const handleCreateOrUpdateTask = async (taskData: Omit<Task, 'id' | 'createdAt'>) => {
+    if (!user) return;
+
+    let updatedTasks = [...tasks];
+    
     if (editingTask) {
-      setTasks(prev => prev.map(t => t.id === editingTask.id ? { ...t, ...taskData } : t));
+      // Update
+      const updatedTask = { ...editingTask, ...taskData };
+      updatedTasks = updatedTasks.map(t => t.id === editingTask.id ? updatedTask : t);
+      
+      // Save to Cloud/Local
+      await saveTask(user, updatedTask);
     } else {
+      // Create
       const newTask: Task = {
         ...taskData,
         id: crypto.randomUUID(),
         createdAt: Date.now(),
       };
-      setTasks(prev => [...prev, newTask]);
+      updatedTasks = [...updatedTasks, newTask];
+      
+      // Save to Cloud/Local
+      await saveTask(user, newTask);
     }
+
+    setTasks(updatedTasks);
+    
+    // Sync LocalStorage backup if in local mode
+    if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
+    
     closeModal();
   };
 
-  const handleDeleteTask = (id: string) => {
+  const handleDeleteTask = async (id: string) => {
+    if (!user) return;
     if (window.confirm('Are you sure you want to delete this task?')) {
-      setTasks(prev => prev.filter(t => t.id !== id));
+      const updatedTasks = tasks.filter(t => t.id !== id);
+      setTasks(updatedTasks);
+      
+      // Delete from DB
+      await deleteTask(id);
+      
+      // Sync LocalStorage backup if in local mode
+      if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
+
       setSelectedTaskIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(id);
@@ -110,26 +138,50 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteSelected = () => {
-    if (selectedTaskIds.size === 0) return;
+  const handleDeleteSelected = async () => {
+    if (!user || selectedTaskIds.size === 0) return;
     
     if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.size} selected task(s)? This action cannot be undone.`)) {
-      setTasks(prev => prev.filter(t => !selectedTaskIds.has(t.id)));
+      // Explicitly cast to string[] to resolve TS error "Type 'unknown' is not assignable to type 'string'"
+      const idsToDelete = Array.from(selectedTaskIds) as string[];
+      const updatedTasks = tasks.filter(t => !selectedTaskIds.has(t.id));
+      setTasks(updatedTasks);
+      
+      // Bulk Delete from DB
+      await deleteMultipleTasks(idsToDelete);
+      
+      // Sync LocalStorage backup if in local mode
+      if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
+
       setSelectedTaskIds(new Set());
     }
   };
 
-  const handleToggleStatus = (task: Task) => {
+  const handleToggleStatus = async (task: Task) => {
+    if (!user) return;
     const newStatus = task.status === Status.COMPLETED ? Status.PENDING : Status.COMPLETED;
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    const updatedTask = { ...task, status: newStatus };
+    
+    const updatedTasks = tasks.map(t => t.id === task.id ? updatedTask : t);
+    setTasks(updatedTasks);
+    
+    await saveTask(user, updatedTask);
+    if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
   };
 
-  const handleToggleSubtask = (taskId: string, subtaskId: string) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id !== taskId) return t;
-      const newSubtasks = t.subtasks.map(s => s.id === subtaskId ? { ...s, isCompleted: !s.isCompleted } : s);
-      return { ...t, subtasks: newSubtasks };
-    }));
+  const handleToggleSubtask = async (taskId: string, subtaskId: string) => {
+    if (!user) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const newSubtasks = task.subtasks.map(s => s.id === subtaskId ? { ...s, isCompleted: !s.isCompleted } : s);
+    const updatedTask = { ...task, subtasks: newSubtasks };
+
+    const updatedTasks = tasks.map(t => t.id === taskId ? updatedTask : t);
+    setTasks(updatedTasks);
+
+    await saveTask(user, updatedTask);
+    if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
   };
 
   const handleToggleSelection = (id: string) => {
@@ -149,7 +201,8 @@ const App: React.FC = () => {
   };
 
   // Auto-Renumber Logic based on Priority and Due Date
-  const handleAutoRenumber = () => {
+  const handleAutoRenumber = async () => {
+    if (!user) return;
     if (!window.confirm("This will re-assign serial numbers based on urgency and due dates. Continue?")) return;
 
     const priorityWeight = {
@@ -176,6 +229,17 @@ const App: React.FC = () => {
     }));
 
     setTasks(renumberedTasks);
+    
+    // Save all changes
+    // Optimization: In Cloud mode, this might fire many requests. 
+    // Ideally we use a batch update, but for now we loop.
+    if (isCloudEnabled) {
+        for (const t of renumberedTasks) {
+            await saveTask(user, t);
+        }
+    } else {
+        saveAllTasks(user, renumberedTasks);
+    }
   };
 
   const openCreateModal = () => {
@@ -230,10 +294,10 @@ const App: React.FC = () => {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !user) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const data = evt.target?.result;
         if (!data) return;
@@ -242,7 +306,6 @@ const App: React.FC = () => {
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         
-        // Use raw parsing to handle headers flexibly
         const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
         if (!jsonData || jsonData.length === 0) {
@@ -254,10 +317,8 @@ const App: React.FC = () => {
         const newTasks: Task[] = [];
 
         jsonData.forEach((row: any) => {
-            // Flexible Key Matching
             const getVal = (keys: string[]) => {
                 for (const k of keys) {
-                    // Try exact match, uppercase, lowercase
                     if (row[k] !== undefined) return row[k];
                     const foundKey = Object.keys(row).find(rk => rk.toLowerCase() === k.toLowerCase());
                     if (foundKey) return row[foundKey];
@@ -266,35 +327,30 @@ const App: React.FC = () => {
             };
 
             const title = getVal(['Title', 'Task Title', 'name']);
-            if (!title) return; // Skip rows without title
+            if (!title) return;
 
-            // Priority Parsing
             let priorityRaw = getVal(['Priority', 'Urgency']);
             let priority = Priority.MEDIUM;
             if (priorityRaw && Object.values(Priority).includes(priorityRaw)) {
                 priority = priorityRaw;
             }
 
-            // Status Parsing
             let statusRaw = getVal(['Status', 'State']);
             let status = Status.PENDING;
             if (statusRaw && Object.values(Status).includes(statusRaw)) {
                 status = statusRaw;
             }
 
-            // Serial Number Parsing
             let serialRaw = getVal(['S.No', 'Serial', 'No', 'ID']);
             let serial = serialRaw ? parseInt(serialRaw) : nextSerial++;
             if (isNaN(serial)) serial = nextSerial++;
 
-            // Tags Parsing
             let tagsRaw = getVal(['Tags', 'Labels', 'Category']);
             let tags: string[] = [];
             if (typeof tagsRaw === 'string') {
                 tags = tagsRaw.split(',').map((t: string) => t.trim()).filter(Boolean);
             }
 
-             // Date Parsing
              let dateRaw = getVal(['Due Date', 'DueDate', 'Due', 'Date']);
              let dueDate = new Date().toISOString();
              if (dateRaw) {
@@ -302,7 +358,6 @@ const App: React.FC = () => {
                  if (!isNaN(parsed.getTime())) dueDate = parsed.toISOString();
              }
 
-             // Description & Progress
              const description = getVal(['Description', 'Desc', 'Details']) || "";
              const progress = getVal(['Progress Notes', 'Progress', 'Notes']) || "";
 
@@ -324,7 +379,16 @@ const App: React.FC = () => {
 
         if (newTasks.length > 0) {
             if (window.confirm(`Found ${newTasks.length} tasks. Import them?`)) {
-                setTasks(prev => [...prev, ...newTasks]);
+                const combinedTasks = [...tasks, ...newTasks];
+                setTasks(combinedTasks);
+                
+                // Save imported tasks to storage
+                if (isCloudEnabled) {
+                    // Batch insert could be better but sticking to loop for safety
+                    for (const t of newTasks) await saveTask(user, t);
+                } else {
+                    saveAllTasks(user, combinedTasks);
+                }
             }
         } else {
             alert("Could not recognize valid task data in the file.");
@@ -332,17 +396,14 @@ const App: React.FC = () => {
 
       } catch (err) {
         console.error("Import Error:", err);
-        alert("Failed to parse file. Please ensure it is a valid CSV or Excel file.");
+        alert("Failed to parse file.");
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     };
-    
-    // Read as binary string for robustness with diverse encoding
     reader.readAsBinaryString(file);
   };
 
-  // Stats
   const stats = useMemo(() => {
     const total = tasks.length;
     const completed = tasks.filter(t => t.status === Status.COMPLETED).length;
@@ -360,8 +421,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 pb-20">
-      
-      {/* Hidden File Input */}
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -370,16 +429,18 @@ const App: React.FC = () => {
         className="hidden" 
       />
 
-      {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="bg-gradient-to-br from-primary-500 to-indigo-600 p-2 rounded-lg text-white">
                <CheckSquare size={24} strokeWidth={2.5} />
             </div>
-            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 hidden sm:block">
-              TaskGenie AI
-            </h1>
+            <div className="hidden sm:block">
+                <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">
+                TaskGenie AI
+                </h1>
+                {isCloudEnabled && <span className="text-[10px] text-primary-500 font-medium flex items-center gap-1"><Cloud size={10}/> Cloud Active</span>}
+            </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
              <div className="hidden lg:flex items-center text-sm font-medium text-gray-600 mr-2 bg-gray-100 px-3 py-1 rounded-full">
@@ -392,15 +453,13 @@ const App: React.FC = () => {
                    <button 
                      onClick={handleDeleteSelected}
                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-all shadow-md animate-in fade-in zoom-in-95"
-                     title="Delete Selected Tasks"
                    >
                      <Trash2 size={16} />
-                     <span className="hidden sm:inline">Delete ({selectedTaskIds.size})</span>
+                     <span className="hidden sm:inline">({selectedTaskIds.size})</span>
                    </button>
                    <button 
                      onClick={clearSelection}
                      className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md transition-colors"
-                     title="Clear Selection"
                    >
                      <X size={18} />
                    </button>
@@ -410,7 +469,7 @@ const App: React.FC = () => {
             <button
               onClick={handleAutoRenumber}
               className="p-2 text-sm font-medium text-gray-600 hover:text-primary-600 transition-colors"
-              title="Auto-Sort & Renumber by Urgency"
+              title="Auto-Sort & Renumber"
             >
               <RefreshCw size={18} />
             </button>
@@ -418,7 +477,6 @@ const App: React.FC = () => {
              <button
               onClick={handleImportClick}
               className="p-2 sm:px-4 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-primary-600 transition-colors shadow-sm"
-              title="Import CSV"
             >
               <Upload size={16} className="sm:mr-2 inline-block"/>
               <span className="hidden sm:inline">Import</span>
@@ -427,7 +485,6 @@ const App: React.FC = () => {
              <button
               onClick={handleExportCSV}
               className="p-2 sm:px-4 sm:py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-primary-600 transition-colors shadow-sm"
-              title="Export to CSV"
             >
               <Download size={16} className="sm:mr-2 inline-block"/>
               <span className="hidden sm:inline">Export</span>
@@ -535,7 +592,11 @@ const App: React.FC = () => {
         </div>
 
         {/* Task Grid/List */}
-        {filteredTasks.length === 0 ? (
+        {isLoadingTasks ? (
+            <div className="flex items-center justify-center py-20">
+                <RefreshCw className="animate-spin text-primary-500" size={32} />
+            </div>
+        ) : filteredTasks.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-300">
             <div className="mx-auto w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-400">
                 <FileSpreadsheet size={32} />
@@ -567,7 +628,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Modal */}
       <Modal 
         isOpen={isModalOpen} 
         onClose={closeModal} 
