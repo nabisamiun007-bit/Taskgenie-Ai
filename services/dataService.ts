@@ -9,7 +9,8 @@ export const loginUser = async (email: string, password: string): Promise<{ user
   if (isCloudEnabled && supabase) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { user: null, error: error.message };
-    if (data.user) {
+    
+    if (data.user && data.session) {
       return { 
         user: { 
           id: data.user.id, 
@@ -18,6 +19,8 @@ export const loginUser = async (email: string, password: string): Promise<{ user
         }, 
         error: null 
       };
+    } else {
+        return { user: null, error: "Login failed. Please check your email verification." };
     }
   } else {
     // Local Fallback
@@ -26,7 +29,6 @@ export const loginUser = async (email: string, password: string): Promise<{ user
     if (user) return { user, error: null };
     return { user: null, error: 'Invalid email or password (Local)' };
   }
-  return { user: null, error: 'Unknown error' };
 };
 
 export const registerUser = async (email: string, password: string, username: string): Promise<{ user: User | null, error: string | null }> => {
@@ -36,8 +38,19 @@ export const registerUser = async (email: string, password: string, username: st
       password,
       options: { data: { username } }
     });
+    
     if (error) return { user: null, error: error.message };
-    if (data.user) {
+
+    // CRITICAL FIX: Check if we actually got a session. 
+    // If 'Confirm Email' is ON in Supabase, data.session will be null.
+    if (data.user && !data.session) {
+        return { 
+            user: null, 
+            error: "Please check your email to confirm your account before logging in." 
+        };
+    }
+
+    if (data.user && data.session) {
       return { 
         user: { id: data.user.id, email: data.user.email || '', username }, 
         error: null 
@@ -56,6 +69,24 @@ export const registerUser = async (email: string, password: string, username: st
 
 // --- DATA SERVICES ---
 
+export const subscribeToAuth = (callback: (user: User | null) => void) => {
+    if (!isCloudEnabled || !supabase) return () => {};
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.user) {
+            callback({
+                id: session.user.id,
+                email: session.user.email || '',
+                username: session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User'
+            });
+        } else {
+            callback(null);
+        }
+    });
+
+    return () => subscription.unsubscribe();
+};
+
 export const fetchTasks = async (user: User): Promise<Task[]> => {
   if (isCloudEnabled && supabase) {
     const { data, error } = await supabase
@@ -65,12 +96,9 @@ export const fetchTasks = async (user: User): Promise<Task[]> => {
     
     if (error) {
       console.error("Error fetching tasks:", error);
-      return [];
+      throw new Error(error.message);
     }
     
-    // Convert DB snake_case to app camelCase if necessary, 
-    // assuming we store them as-is or use JSON mapping.
-    // For simplicity, we assume the DB columns match the Task interface or we map them here.
     return (data || []).map((t: any) => ({
       id: t.id,
       serialNumber: t.serial_number,
@@ -111,13 +139,15 @@ export const saveTask = async (user: User, task: Task): Promise<void> => {
       progress_notes: task.progressNotes
     };
 
-    const { error } = await supabase.from('tasks').upsert(dbTask);
-    if (error) console.error("Error saving task:", error);
+    const { error } = await supabase.from('tasks').upsert(dbTask, { onConflict: 'id' });
+    
+    if (error) {
+        console.error("Supabase Save Error:", error);
+        throw new Error(`Failed to save to cloud: ${error.message}`);
+    }
   } else {
-    // For local storage, we need to read-modify-write the whole array
-    // This helper is for a single task update, but local storage works on arrays.
-    // We will let App.tsx handle the array state, and here we just persist the array.
-    // Use `saveAllTasks` for local storage simplicity.
+    // Local storage is handled by saveAllTasks in the main App logic for simplicity,
+    // but individual save logic would go here if needed.
   }
 };
 
@@ -126,18 +156,18 @@ export const saveAllTasks = async (user: User, tasks: Task[]): Promise<void> => 
     const key = `taskgenie-tasks-${user.id}`;
     localStorage.setItem(key, JSON.stringify(tasks));
   }
-  // We don't implement bulk save for Cloud to avoid overwriting race conditions, 
-  // usually cloud updates individual items.
 };
 
 export const deleteTask = async (taskId: string): Promise<void> => {
   if (isCloudEnabled && supabase) {
-    await supabase.from('tasks').delete().eq('id', taskId);
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (error) console.error("Error deleting task:", error);
   }
 };
 
 export const deleteMultipleTasks = async (taskIds: string[]): Promise<void> => {
     if (isCloudEnabled && supabase) {
-      await supabase.from('tasks').delete().in('id', taskIds);
+      const { error } = await supabase.from('tasks').delete().in('id', taskIds);
+      if (error) console.error("Error deleting multiple tasks:", error);
     }
   };

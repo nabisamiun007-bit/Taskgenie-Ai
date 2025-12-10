@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Mail, Lock, LogIn, UserPlus, CheckCircle2, Cloud, HardDrive } from 'lucide-react';
+import { User, Mail, Lock, LogIn, UserPlus, CheckCircle2, Cloud, HardDrive, AlertCircle } from 'lucide-react';
 import { User as UserType } from '../types';
 import { loginUser, registerUser, isCloudEnabled } from '../services/dataService';
 
@@ -129,7 +129,20 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
               </div>
             </div>
 
-            {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+            {error && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={16} />
+                    <div className="text-sm text-red-600">
+                        <span className="font-semibold block mb-0.5">Authentication Error</span>
+                        {error}
+                        {error.includes("Email not confirmed") && (
+                            <span className="block mt-1 text-xs text-red-500">
+                                Tip: You can disable email confirmation in your Supabase Dashboard under Auth → Providers → Email.
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
 
             <button
               type="submit"
