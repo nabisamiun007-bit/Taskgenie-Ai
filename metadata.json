@@ -1,0 +1,5 @@
+{
+  "name": "TaskGenie AI",
+  "description": "A smart, AI-powered task manager that helps you organize, prioritize, and break down complex tasks using Gemini. Features Excel export and a beautiful modern UI.",
+  "requestFramePermissions": []
+}
