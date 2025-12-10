@@ -6,18 +6,16 @@ declare const process: any;
 
 export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> => {
   // Check for Vite env var first (standard for Vercel/Netlify deployments)
-  // We access import.meta.env safely using type casting if needed, but vite/client types in tsconfig should handle it
   const viteEnv = (import.meta as any).env;
   
-  // Logic: Use VITE_API_KEY if available, otherwise fallback to process.env.API_KEY (safe access)
+  // Logic: Use VITE_API_KEY if available, otherwise fallback to process.env.API_KEY
   const apiKey = viteEnv?.VITE_API_KEY || (typeof process !== 'undefined' ? process.env?.API_KEY : undefined);
   
   if (!apiKey) {
-    console.error("API Key is missing. Please set VITE_API_KEY in your deployment settings.");
-    throw new Error("API Key is missing.");
+    throw new Error("API Key is missing. Please set VITE_API_KEY in your deployment settings.");
   }
 
-  // Initialize client inside the function to ensure env var is ready
+  // Initialize client inside the function
   const ai = new GoogleGenAI({ apiKey });
   const model = "gemini-2.5-flash";
   
@@ -41,7 +39,6 @@ export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> 
           type: Type.OBJECT,
           properties: {
             description: { type: Type.STRING },
-            // Hardcode enum values to match Priority enum strings exactly
             priority: { type: Type.STRING, enum: ['Low', 'Medium', 'High', 'Urgent'] },
             subtasks: { 
               type: Type.ARRAY, 
@@ -59,20 +56,21 @@ export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> 
 
     const text = response.text;
     if (!text) {
-        throw new Error("No response text from AI");
+        throw new Error("No response received from AI service.");
     }
 
     const json = JSON.parse(text) as AIResponse;
     return json;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error calling Gemini:", error);
-    // Return safe fallback instead of throwing to prevent app crash
-    return {
-      description: "Could not generate description. Please try again.",
-      priority: Priority.MEDIUM,
-      subtasks: ["Review task details"],
-      tags: ["Task"]
-    };
+    
+    // Throw specific error messages for better UI feedback
+    if (error.message?.includes("API Key")) throw error;
+    if (error.status === 403 || error.message?.includes("permission")) {
+        throw new Error("Invalid API Key or unauthorized access.");
+    }
+    
+    throw new Error("Failed to generate content. Please try again later.");
   }
 };

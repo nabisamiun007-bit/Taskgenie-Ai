@@ -3,10 +3,12 @@ import { Task, Status, Priority, User } from './types';
 import TaskCard from './components/TaskCard';
 import TaskForm from './components/TaskForm';
 import Modal from './components/Modal';
+import ConfirmationModal from './components/ConfirmationModal';
+import AccountSettings from './components/AccountSettings';
 import AuthScreen from './components/AuthScreen';
-import { Plus, Download, Upload, LayoutGrid, List as ListIcon, Search, CheckSquare, X, LogOut, FileSpreadsheet, RefreshCw, Trash2, Cloud, CloudOff } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, List as ListIcon, Search, CheckSquare, X, LogOut, FileSpreadsheet, RefreshCw, Trash2, Cloud, User as UserIcon } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { fetchTasks, saveTask, saveAllTasks, deleteTask, deleteMultipleTasks, isCloudEnabled } from './services/dataService';
+import { fetchTasks, saveTask, saveAllTasks, deleteTask, deleteMultipleTasks, isCloudEnabled, subscribeToAuth } from './services/dataService';
 
 const App: React.FC = () => {
   // Auth State
@@ -16,8 +18,22 @@ const App: React.FC = () => {
   // App State
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Modals
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  
+  // Confirmation Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'danger' | 'success';
+    onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', type: 'info', onConfirm: () => {} });
+
+  // Filters & Views
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | Status>('All');
   const [priorityFilter, setPriorityFilter] = useState<'All' | Priority>('All');
@@ -25,10 +41,11 @@ const App: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load User Session
+  // Load User Session & Tasks
   useEffect(() => {
+    // Local check first
     const storedUser = localStorage.getItem('taskgenie-current-user');
-    if (storedUser) {
+    if (storedUser && !isCloudEnabled) {
       try {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
@@ -36,6 +53,18 @@ const App: React.FC = () => {
         localStorage.removeItem('taskgenie-current-user');
       }
     }
+
+    // Subscribe to Cloud Auth
+    const unsubscribe = subscribeToAuth((cloudUser) => {
+        if (cloudUser) {
+            setUser(cloudUser);
+        } else if (isCloudEnabled) {
+            setUser(null);
+            setTasks([]);
+        }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Load Tasks whenever user logs in
@@ -61,7 +90,9 @@ const App: React.FC = () => {
 
   // Auth Handlers
   const handleLogin = (loggedInUser: User) => {
-    localStorage.setItem('taskgenie-current-user', JSON.stringify(loggedInUser));
+    if (!isCloudEnabled) {
+        localStorage.setItem('taskgenie-current-user', JSON.stringify(loggedInUser));
+    }
     setUser(loggedInUser);
   };
 
@@ -70,6 +101,12 @@ const App: React.FC = () => {
     setUser(null);
     setTasks([]); 
     setSelectedTaskIds(new Set());
+    setIsAccountModalOpen(false);
+  };
+
+  // Helper for Confirmation Modal
+  const confirmAction = (title: string, message: string, onConfirm: () => void, type: 'info' | 'danger' | 'success' = 'info') => {
+      setConfirmModal({ isOpen: true, title, message, onConfirm, type });
   };
 
   // Derived State (Filtered Tasks)
@@ -95,8 +132,13 @@ const App: React.FC = () => {
       const updatedTask = { ...editingTask, ...taskData };
       updatedTasks = updatedTasks.map(t => t.id === editingTask.id ? updatedTask : t);
       
-      // Save to Cloud/Local
-      await saveTask(user, updatedTask);
+      try {
+        await saveTask(user, updatedTask);
+        setTasks(updatedTasks);
+      } catch (e: any) {
+        alert(e.message);
+        return;
+      }
     } else {
       // Create
       const newTask: Task = {
@@ -106,60 +148,76 @@ const App: React.FC = () => {
       };
       updatedTasks = [...updatedTasks, newTask];
       
-      // Save to Cloud/Local
-      await saveTask(user, newTask);
+      try {
+        await saveTask(user, newTask);
+        setTasks(updatedTasks);
+      } catch (e: any) {
+        alert(e.message);
+        return;
+      }
     }
-
-    setTasks(updatedTasks);
     
     // Sync LocalStorage backup if in local mode
     if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
     
-    closeModal();
+    closeTaskModal();
   };
 
   const handleDeleteTask = async (id: string) => {
     if (!user) return;
-    if (window.confirm('Are you sure you want to delete this task?')) {
-      const updatedTasks = tasks.filter(t => t.id !== id);
-      setTasks(updatedTasks);
-      
-      // Delete from DB
-      await deleteTask(id);
-      
-      // Sync LocalStorage backup if in local mode
-      if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
+    
+    confirmAction(
+        "Delete Task", 
+        "Are you sure you want to delete this task?", 
+        async () => {
+            const updatedTasks = tasks.filter(t => t.id !== id);
+            setTasks(updatedTasks);
+            
+            await deleteTask(id);
+            if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
 
-      setSelectedTaskIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
-      });
-    }
+            setSelectedTaskIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(id);
+                return newSet;
+            });
+        },
+        'danger'
+    );
   };
 
   const handleDeleteSelected = async () => {
     if (!user || selectedTaskIds.size === 0) return;
     
-    if (window.confirm(`Are you sure you want to delete ${selectedTaskIds.size} selected task(s)? This action cannot be undone.`)) {
-      // Explicitly cast to string[] to resolve TS error "Type 'unknown' is not assignable to type 'string'"
-      const idsToDelete = Array.from(selectedTaskIds) as string[];
-      const updatedTasks = tasks.filter(t => !selectedTaskIds.has(t.id));
-      setTasks(updatedTasks);
-      
-      // Bulk Delete from DB
-      await deleteMultipleTasks(idsToDelete);
-      
-      // Sync LocalStorage backup if in local mode
-      if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
+    confirmAction(
+        "Delete Selected",
+        `Are you sure you want to delete ${selectedTaskIds.size} selected task(s)? This action cannot be undone.`,
+        async () => {
+            const idsToDelete = Array.from(selectedTaskIds) as string[];
+            const updatedTasks = tasks.filter(t => !selectedTaskIds.has(t.id));
+            setTasks(updatedTasks);
+            
+            await deleteMultipleTasks(idsToDelete);
+            if (!isCloudEnabled) saveAllTasks(user, updatedTasks);
 
-      setSelectedTaskIds(new Set());
-    }
+            setSelectedTaskIds(new Set());
+        },
+        'danger'
+    );
   };
 
   const handleToggleStatus = async (task: Task) => {
     if (!user) return;
-    const newStatus = task.status === Status.COMPLETED ? Status.PENDING : Status.COMPLETED;
+    
+    const currentTask = tasks.find(t => t.id === task.id);
+    if (!currentTask) return;
+
+    let newStatus = task.status;
+    
+    if (task.status === currentTask.status) {
+         newStatus = task.status === Status.COMPLETED ? Status.PENDING : Status.COMPLETED;
+    }
+
     const updatedTask = { ...task, status: newStatus };
     
     const updatedTasks = tasks.map(t => t.id === task.id ? updatedTask : t);
@@ -200,92 +258,121 @@ const App: React.FC = () => {
     setSelectedTaskIds(new Set());
   };
 
-  // Auto-Renumber Logic based on Priority and Due Date
+  // Auto-Renumber Logic
   const handleAutoRenumber = async () => {
     if (!user) return;
-    if (!window.confirm("This will re-assign serial numbers based on urgency and due dates. Continue?")) return;
-
-    const priorityWeight = {
-      [Priority.URGENT]: 4,
-      [Priority.HIGH]: 3,
-      [Priority.MEDIUM]: 2,
-      [Priority.LOW]: 1
-    };
-
-    const sortedTasks = [...tasks].sort((a, b) => {
-      // 1. Sort by Priority (Descending)
-      const pDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
-      if (pDiff !== 0) return pDiff;
-      
-      // 2. Sort by Due Date (Ascending)
-      const dateA = new Date(a.dueDate).getTime();
-      const dateB = new Date(b.dueDate).getTime();
-      return dateA - dateB;
-    });
-
-    const renumberedTasks = sortedTasks.map((t, index) => ({
-      ...t,
-      serialNumber: index + 1
-    }));
-
-    setTasks(renumberedTasks);
     
-    // Save all changes
-    // Optimization: In Cloud mode, this might fire many requests. 
-    // Ideally we use a batch update, but for now we loop.
-    if (isCloudEnabled) {
-        for (const t of renumberedTasks) {
-            await saveTask(user, t);
+    confirmAction(
+        "Auto-Sort Tasks",
+        "This will re-assign serial numbers based on urgency and due dates. Continue?",
+        async () => {
+            const priorityWeight = {
+            [Priority.URGENT]: 4,
+            [Priority.HIGH]: 3,
+            [Priority.MEDIUM]: 2,
+            [Priority.LOW]: 1
+            };
+
+            const sortedTasks = [...tasks].sort((a, b) => {
+            // 1. Sort by Priority (Descending)
+            const pDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
+            if (pDiff !== 0) return pDiff;
+            
+            // 2. Sort by Due Date (Ascending)
+            const dateA = new Date(a.dueDate).getTime();
+            const dateB = new Date(b.dueDate).getTime();
+            return dateA - dateB;
+            });
+
+            const renumberedTasks = sortedTasks.map((t, index) => ({
+            ...t,
+            serialNumber: index + 1
+            }));
+
+            setTasks(renumberedTasks);
+            
+            if (isCloudEnabled) {
+                for (const t of renumberedTasks) {
+                    await saveTask(user, t);
+                }
+            } else {
+                saveAllTasks(user, renumberedTasks);
+            }
         }
-    } else {
-        saveAllTasks(user, renumberedTasks);
-    }
+    );
   };
 
   const openCreateModal = () => {
     setEditingTask(null);
-    setIsModalOpen(true);
+    setIsTaskModalOpen(true);
   };
 
   const openEditModal = (task: Task) => {
     setEditingTask(task);
-    setIsModalOpen(true);
+    setIsTaskModalOpen(true);
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
+  const closeTaskModal = () => {
+    setIsTaskModalOpen(false);
     setEditingTask(null);
   };
 
+  // Export CSV
   const handleExportCSV = () => {
     const tasksToExport = selectedTaskIds.size > 0 
       ? tasks.filter(t => selectedTaskIds.has(t.id))
       : tasks;
 
     if (tasksToExport.length === 0) {
-      alert("No tasks available to export.");
+      confirmAction("Export Failed", "No tasks available to export.", () => {}, 'danger');
       return;
     }
 
-    // Format for CSV
-    const dataToExport = tasksToExport.map(t => ({
-      "S.No": t.serialNumber,
-      "Title": t.title,
-      "Description": t.description,
-      "Priority": t.priority,
-      "Status": t.status,
-      "Due Date": new Date(t.dueDate).toISOString().split('T')[0],
-      "Tags": t.tags.join(', '),
-      "Progress Notes": t.progressNotes || ""
-    }));
+    // Sort by Serial Number for better organization
+    tasksToExport.sort((a, b) => a.serialNumber - b.serialNumber);
+
+    const dataToExport = tasksToExport.map(t => {
+      // Safely extract YYYY-MM-DD from ISO string to prevent timezone offsets
+      // Use split('T')[0] if available to get the raw date entered by user
+      const dateStr = t.dueDate.includes('T') ? t.dueDate.split('T')[0] : t.dueDate;
+
+      return {
+        "S.No": t.serialNumber,
+        "Title": t.title,
+        "Description": t.description,
+        "Priority": t.priority,
+        "Status": t.status,
+        "Due Date": dateStr,
+        "Tags": t.tags ? t.tags.join(', ') : "",
+        "Progress Notes": t.progressNotes || ""
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Tasks");
     
-    // Export as CSV
     const fileName = selectedTaskIds.size > 0 ? "SelectedTasks.csv" : "MyTasks.csv";
     XLSX.writeFile(wb, fileName, { bookType: 'csv' });
+  };
+
+  // Date Parsing Helper
+  const parseExcelDate = (dateVal: any): string => {
+      if (!dateVal) return new Date().toISOString();
+      
+      // If it's a number (Excel Serial Date)
+      if (typeof dateVal === 'number') {
+          const jsDate = new Date((dateVal - 25569) * 86400 * 1000);
+          return jsDate.toISOString();
+      }
+      
+      // If it's a string
+      const parsed = new Date(dateVal);
+      if (!isNaN(parsed.getTime())) {
+          return parsed.toISOString();
+      }
+      
+      return new Date().toISOString();
   };
 
   const handleImportClick = () => {
@@ -309,7 +396,7 @@ const App: React.FC = () => {
         const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
         if (!jsonData || jsonData.length === 0) {
-          alert("No data found in file.");
+          confirmAction("Import Failed", "No data found in file.", () => {}, 'danger');
           return;
         }
 
@@ -352,11 +439,7 @@ const App: React.FC = () => {
             }
 
              let dateRaw = getVal(['Due Date', 'DueDate', 'Due', 'Date']);
-             let dueDate = new Date().toISOString();
-             if (dateRaw) {
-                 const parsed = new Date(dateRaw);
-                 if (!isNaN(parsed.getTime())) dueDate = parsed.toISOString();
-             }
+             const dueDate = parseExcelDate(dateRaw);
 
              const description = getVal(['Description', 'Desc', 'Details']) || "";
              const progress = getVal(['Progress Notes', 'Progress', 'Notes']) || "";
@@ -378,25 +461,28 @@ const App: React.FC = () => {
         });
 
         if (newTasks.length > 0) {
-            if (window.confirm(`Found ${newTasks.length} tasks. Import them?`)) {
-                const combinedTasks = [...tasks, ...newTasks];
-                setTasks(combinedTasks);
-                
-                // Save imported tasks to storage
-                if (isCloudEnabled) {
-                    // Batch insert could be better but sticking to loop for safety
-                    for (const t of newTasks) await saveTask(user, t);
-                } else {
-                    saveAllTasks(user, combinedTasks);
-                }
-            }
+            confirmAction(
+                "Import Tasks",
+                `Found ${newTasks.length} tasks in the file. Would you like to import them?`,
+                async () => {
+                    const combinedTasks = [...tasks, ...newTasks];
+                    setTasks(combinedTasks);
+                    
+                    if (isCloudEnabled) {
+                        for (const t of newTasks) await saveTask(user, t);
+                    } else {
+                        saveAllTasks(user, combinedTasks);
+                    }
+                },
+                'success'
+            );
         } else {
-            alert("Could not recognize valid task data in the file.");
+            confirmAction("Import Failed", "Could not recognize valid task data in the file.", () => {}, 'danger');
         }
 
       } catch (err) {
         console.error("Import Error:", err);
-        alert("Failed to parse file.");
+        confirmAction("Import Error", "Failed to parse the file.", () => {}, 'danger');
       } finally {
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
@@ -443,10 +529,13 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-             <div className="hidden lg:flex items-center text-sm font-medium text-gray-600 mr-2 bg-gray-100 px-3 py-1 rounded-full">
-                {user.avatar ? <img src={user.avatar} className="w-5 h-5 rounded-full mr-2"/> : <div className="w-5 h-5 rounded-full bg-primary-200 mr-2"/>}
+             <button
+                onClick={() => setIsAccountModalOpen(true)}
+                className="hidden lg:flex items-center text-sm font-medium text-gray-600 mr-2 bg-gray-100 pl-2 pr-3 py-1 rounded-full hover:bg-gray-200 transition-colors"
+             >
+                {user.avatar ? <img src={user.avatar} className="w-5 h-5 rounded-full mr-2"/> : <div className="w-5 h-5 rounded-full bg-primary-200 mr-2 flex items-center justify-center text-[10px] text-primary-700">{user.username[0].toUpperCase()}</div>}
                 {user.username}
-             </div>
+             </button>
 
              {selectedTaskIds.size > 0 && (
                <div className="flex items-center gap-2 mr-1">
@@ -499,18 +588,17 @@ const App: React.FC = () => {
             </button>
             
              <button 
-                onClick={handleLogout}
-                className="ml-1 sm:ml-2 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                title="Logout"
+                onClick={() => setIsAccountModalOpen(true)}
+                className="ml-1 sm:ml-2 p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                title="Account Settings"
              >
-                <LogOut size={20} />
+                <UserIcon size={20} />
              </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
         {/* Dashboard Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
@@ -628,18 +716,43 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/* Task Form Modal */}
       <Modal 
-        isOpen={isModalOpen} 
-        onClose={closeModal} 
+        isOpen={isTaskModalOpen} 
+        onClose={closeTaskModal} 
         title={editingTask ? 'Edit Task' : 'Create New Task'}
       >
         <TaskForm 
             initialTask={editingTask} 
             onSubmit={handleCreateOrUpdateTask} 
-            onCancel={closeModal}
+            onCancel={closeTaskModal}
             suggestedSerialNumber={nextAvailableSerial}
         />
       </Modal>
+
+      {/* Account Settings Modal */}
+      <Modal
+        isOpen={isAccountModalOpen}
+        onClose={() => setIsAccountModalOpen(false)}
+        title="Account Settings"
+      >
+        <AccountSettings 
+            user={user}
+            onUpdateUser={setUser}
+            onLogout={handleLogout}
+            onClose={() => setIsAccountModalOpen(false)}
+        />
+      </Modal>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+      />
 
     </div>
   );

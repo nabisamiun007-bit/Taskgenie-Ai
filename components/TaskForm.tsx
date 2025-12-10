@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Task, Priority, Status, AIResponse } from '../types';
 import { enhanceTaskWithAI } from '../services/geminiService';
-import { Sparkles, Loader2, Plus, Trash2, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Sparkles, Loader2, Plus, Trash2, Upload, AlertCircle } from 'lucide-react';
 
 interface TaskFormProps {
   initialTask?: Task | null;
@@ -18,11 +18,13 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
   const [status, setStatus] = useState<Status>(Status.PENDING);
   const [dueDate, setDueDate] = useState('');
   const [subtasksText, setSubtasksText] = useState<string[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
+  // Use a string for tags input to prevent comma glitches while typing
+  const [tagsInput, setTagsInput] = useState('');
   const [progressNotes, setProgressNotes] = useState('');
   const [images, setImages] = useState<string[]>([]);
   
   const [isGenerating, setIsGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
       setStatus(initialTask.status);
       setDueDate(initialTask.dueDate.split('T')[0]);
       setSubtasksText(initialTask.subtasks.map(s => s.title));
-      setTags(initialTask.tags || []);
+      setTagsInput(initialTask.tags ? initialTask.tags.join(', ') : '');
       setProgressNotes(initialTask.progressNotes || '');
       setImages(initialTask.images || []);
     } else {
@@ -49,15 +51,18 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
   const handleAIAutoFill = async () => {
     if (!title) return;
     setIsGenerating(true);
+    setAiError(null);
     try {
       const aiData: AIResponse = await enhanceTaskWithAI(title);
       setDescription(aiData.description);
       setPriority(aiData.priority);
       setSubtasksText(aiData.subtasks);
-      setTags(aiData.tags);
-    } catch (e) {
+      // Append new tags to existing ones if any
+      const newTags = aiData.tags.join(', ');
+      setTagsInput(prev => prev ? `${prev}, ${newTags}` : newTags);
+    } catch (e: any) {
       console.error(e);
-      alert("Failed to generate AI content. Check your API Key.");
+      setAiError(e.message || "Failed to generate AI content.");
     } finally {
       setIsGenerating(false);
     }
@@ -73,7 +78,6 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
             setImages(prev => [...prev, reader.result as string]);
           }
         };
-        // Fix for TS error: Argument of type 'unknown' is not assignable to parameter of type 'Blob'.
         reader.readAsDataURL(file as Blob);
       });
     }
@@ -85,6 +89,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Parse tags string into array on submit
+    const tagsArray = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+
     onSubmit({
       title,
       serialNumber,
@@ -93,7 +100,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
       status,
       dueDate: new Date(dueDate).toISOString(),
       subtasks: subtasksText.map(st => ({ id: crypto.randomUUID(), title: st, isCompleted: false })),
-      tags,
+      tags: tagsArray,
       progressNotes,
       images
     });
@@ -144,6 +151,11 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
                 AI
             </button>
             </div>
+            {aiError && (
+                <p className="text-xs text-red-500 flex items-center gap-1 mt-1">
+                    <AlertCircle size={12}/> {aiError}
+                </p>
+            )}
         </div>
       </div>
 
@@ -272,8 +284,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
         <label className="block text-sm font-medium text-gray-700">Tags (comma separated)</label>
         <input
             type="text"
-            value={tags.join(', ')}
-            onChange={(e) => setTags(e.target.value.split(',').map(t => t.trim()).filter(Boolean))}
+            value={tagsInput}
+            onChange={(e) => setTagsInput(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
             placeholder="Work, Urgent, Review"
           />

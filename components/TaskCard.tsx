@@ -1,6 +1,6 @@
 import React from 'react';
 import { Task, Priority, Status } from '../types';
-import { Calendar, CheckCircle2, Circle, Edit2, Trash2, Tag, ChevronDown, ChevronUp, Image as ImageIcon, FileText } from 'lucide-react';
+import { Calendar, CheckCircle2, Circle, Edit2, Trash2, Tag, ChevronDown, ChevronUp, FileText, Play, Pause } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
@@ -32,6 +32,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const isCompleted = task.status === Status.COMPLETED;
+  const isInProgress = task.status === Status.IN_PROGRESS;
+  
   const completedSubtasks = task.subtasks.filter(s => s.isCompleted).length;
   const totalSubtasks = task.subtasks.length;
   const progress = totalSubtasks === 0 ? (isCompleted ? 100 : 0) : Math.round((completedSubtasks / totalSubtasks) * 100);
@@ -40,7 +42,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
     <div 
       className={`group relative bg-white rounded-xl border transition-all duration-300 hover:shadow-lg 
         ${isSelected ? 'border-primary-500 ring-1 ring-primary-500 bg-primary-50/10' : 
-          (isCompleted ? 'border-gray-200 opacity-75' : 'border-gray-200 hover:border-primary-200')}`}
+          (isCompleted ? 'border-gray-200 opacity-75' : 
+           isInProgress ? 'border-blue-300 ring-1 ring-blue-100' : 'border-gray-200 hover:border-primary-200')}`}
     >
       <div className="p-5">
         <div className="flex justify-between items-start mb-3">
@@ -62,8 +65,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${priorityColors[task.priority]}`}>
                 {task.priority}
               </span>
-              {task.tags.map(tag => (
-                <span key={tag} className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
+              {isInProgress && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
+                    <Play size={10} fill="currentColor" /> In Progress
+                </span>
+              )}
+              {task.tags.map((tag, idx) => (
+                <span key={idx} className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
                   <Tag size={10} /> {tag}
                 </span>
               ))}
@@ -89,12 +97,46 @@ const TaskCard: React.FC<TaskCardProps> = ({
         </div>
 
         <div className="flex items-start gap-3 mb-2 pl-9">
-          <button 
-            onClick={() => onToggleStatus(task)}
-            className={`mt-1 flex-shrink-0 transition-colors ${isCompleted ? 'text-green-500' : 'text-gray-300 hover:text-primary-500'}`}
-          >
-            {isCompleted ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-          </button>
+          {/* Status Controls */}
+          <div className="mt-1 flex-shrink-0 flex gap-2">
+             {/* Main Checkbox */}
+            <button 
+                onClick={() => onToggleStatus(task)} 
+                className={`transition-colors ${isCompleted ? 'text-green-500' : 'text-gray-300 hover:text-primary-500'}`}
+                title={isCompleted ? "Mark Pending" : "Mark Completed"}
+            >
+                {isCompleted ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+            </button>
+            
+            {/* Start Button (Only for Pending) */}
+            {!isCompleted && !isInProgress && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleStatus({ ...task, status: Status.IN_PROGRESS });
+                    }}
+                    className="text-gray-300 hover:text-blue-500 transition-colors"
+                    title="Start Working"
+                >
+                    <Play size={22} />
+                </button>
+            )}
+
+            {/* Pause Button (Only for In Progress) - Revert to Pending */}
+            {!isCompleted && isInProgress && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleStatus({ ...task, status: Status.PENDING });
+                    }}
+                    className="text-blue-500 hover:text-blue-700 transition-colors"
+                    title="Pause (Set to Pending)"
+                >
+                    <Pause size={22} />
+                </button>
+            )}
+          </div>
+
           <div className="flex-1">
             <h3 className={`font-semibold text-lg text-gray-900 leading-tight ${isCompleted ? 'line-through text-gray-500' : ''}`}>
               {task.title}
@@ -117,7 +159,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50 pl-9">
           <div className="flex items-center text-xs text-gray-400">
             <Calendar size={14} className="mr-1.5" />
-            {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            {/* Use UTC timezone to prevent date shift when viewing ISO strings in local time */}
+            {new Date(task.dueDate).toLocaleDateString(undefined, { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                timeZone: 'UTC' 
+            })}
           </div>
 
           <div className="flex items-center gap-3">
