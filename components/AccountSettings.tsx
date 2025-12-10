@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { updateUserProfile, changeUserPassword, deleteUserAccount } from '../services/dataService';
-import { UserCog, Lock, Trash2, Save, LogOut, Shield, User as UserIcon, AlertTriangle } from 'lucide-react';
+import { UserCog, Lock, Trash2, Save, LogOut, Shield, User as UserIcon, AlertTriangle, Sparkles, Key, Check } from 'lucide-react';
 
 interface AccountSettingsProps {
   user: User;
@@ -13,9 +13,16 @@ interface AccountSettingsProps {
 const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, onLogout, onClose }) => {
   const [username, setUsername] = useState(user.username);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile');
+  const [apiKey, setApiKey] = useState('');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'ai'>('profile');
   const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Load existing key from local storage
+    const storedKey = localStorage.getItem('user_gemini_api_key');
+    if (storedKey) setApiKey(storedKey);
+  }, []);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +66,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
     }
   };
 
+  const handleSaveApiKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (apiKey.trim()) {
+        localStorage.setItem('user_gemini_api_key', apiKey.trim());
+        setStatus({ type: 'success', msg: 'API Key saved locally!' });
+    } else {
+        localStorage.removeItem('user_gemini_api_key');
+        setStatus({ type: 'success', msg: 'API Key removed.' });
+    }
+  };
+
   const handleDeleteAccount = async () => {
     if (window.confirm("DANGER: Are you sure you want to delete your account? All data will be lost permanently.")) {
         await deleteUserAccount(user.id);
@@ -94,6 +112,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
         >
           <Shield size={18} /> Security
         </button>
+        <button
+          onClick={() => { setActiveTab('ai'); setStatus(null); }}
+          className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${activeTab === 'ai' ? 'bg-white text-purple-600 shadow-sm ring-1 ring-gray-100' : 'text-gray-600 hover:bg-gray-100'}`}
+        >
+          <Sparkles size={18} /> AI Config
+        </button>
 
         <div className="mt-auto pt-4 border-t border-gray-200">
             <button
@@ -108,12 +132,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
       {/* Main Content */}
       <div className="flex-1 p-6 md:p-8 overflow-y-auto">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">
-            {activeTab === 'profile' ? 'Edit Profile' : 'Security Settings'}
+            {activeTab === 'profile' ? 'Edit Profile' : activeTab === 'security' ? 'Security Settings' : 'AI Configuration'}
         </h2>
 
         {status && (
             <div className={`mb-6 p-4 rounded-xl flex items-start gap-3 border ${status.type === 'success' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
                {status.type === 'error' && <AlertTriangle size={20} className="shrink-0" />}
+               {status.type === 'success' && <Check size={20} className="shrink-0" />}
                <span className="text-sm font-medium">{status.msg}</span>
             </div>
         )}
@@ -197,6 +222,53 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
                 </div>
             </div>
         )}
+
+        {activeTab === 'ai' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                    <h3 className="font-semibold text-purple-900 flex items-center gap-2 mb-2">
+                        <Sparkles size={18} /> Google Gemini AI
+                    </h3>
+                    <p className="text-sm text-purple-800">
+                        TaskGenie uses Gemini AI to auto-generate tasks. If you see an "API Key Missing" error, you can paste your own personal API key below.
+                    </p>
+                    <a 
+                        href="https://aistudio.google.com/app/apikey" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-xs text-purple-600 hover:text-purple-800 underline mt-2 inline-block font-medium"
+                    >
+                        Get a free API Key from Google AI Studio &rarr;
+                    </a>
+                </div>
+
+                <form onSubmit={handleSaveApiKey} className="space-y-4 max-w-md">
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">Custom API Key</label>
+                        <div className="relative">
+                            <Key size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                placeholder="AIzaSy..."
+                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-all font-mono text-sm"
+                            />
+                        </div>
+                        <p className="text-xs text-gray-400">
+                            This key is stored locally on your device browser.
+                        </p>
+                    </div>
+                    <button
+                        type="submit"
+                        className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors text-sm font-medium shadow-lg shadow-purple-200"
+                    >
+                         <Save size={18} /> Save API Key
+                    </button>
+                </form>
+            </div>
+        )}
+
       </div>
     </div>
   );

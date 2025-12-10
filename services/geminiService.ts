@@ -8,11 +8,15 @@ export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> 
   // Check for Vite env var first (standard for Vercel/Netlify deployments)
   const viteEnv = (import.meta as any).env;
   
-  // Logic: Use VITE_API_KEY if available, otherwise fallback to process.env.API_KEY
-  const apiKey = viteEnv?.VITE_API_KEY || (typeof process !== 'undefined' ? process.env?.API_KEY : undefined);
+  // Logic: 
+  // 1. Check VITE_API_KEY (Deployment Env)
+  // 2. Check process.env.API_KEY (Node Env)
+  // 3. Check LocalStorage (User entered manually in Settings)
+  const storedKey = localStorage.getItem('user_gemini_api_key');
+  const apiKey = viteEnv?.VITE_API_KEY || (typeof process !== 'undefined' ? process.env?.API_KEY : undefined) || storedKey;
   
   if (!apiKey) {
-    throw new Error("API Key is missing. Please set VITE_API_KEY in your deployment settings.");
+    throw new Error("API Key is missing. Please go to Account Settings -> AI Config and enter your Google Gemini API Key.");
   }
 
   // Initialize client inside the function
@@ -67,8 +71,8 @@ export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> 
     
     // Throw specific error messages for better UI feedback
     if (error.message?.includes("API Key")) throw error;
-    if (error.status === 403 || error.message?.includes("permission")) {
-        throw new Error("Invalid API Key or unauthorized access.");
+    if (error.status === 403 || error.message?.includes("permission") || error.message?.includes("400")) {
+        throw new Error("Invalid API Key. Please check your key in Settings -> AI Config.");
     }
     
     throw new Error("Failed to generate content. Please try again later.");
