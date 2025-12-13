@@ -1,6 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AIResponse } from "../types";
 
+// Declare process to satisfy TypeScript compiler during build
+declare var process: {
+  env: {
+    API_KEY: string;
+    [key: string]: string | undefined;
+  }
+};
+
 export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> => {
   // Use process.env.API_KEY as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
