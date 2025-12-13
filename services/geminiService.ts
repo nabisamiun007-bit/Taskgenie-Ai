@@ -2,15 +2,26 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AIResponse, Priority } from "../types";
 
 export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> => {
-  // Check for Vite env var first (standard for Vercel/Netlify deployments)
-  const viteEnv = (import.meta as any).env;
-  
-  // Logic: 
-  // 1. Check VITE_API_KEY (Deployment Env)
-  // 2. Check process.env.API_KEY (Node Env)
-  // 3. Check LocalStorage (User entered manually in Settings)
+  // Helper to safely get env vars without tripping TypeScript build errors
+  const getEnvVar = (key: string): string | undefined => {
+    // 1. Check Vite's import.meta.env
+    try {
+      const metaEnv = (import.meta as any).env;
+      if (metaEnv && metaEnv[key]) return metaEnv[key];
+    } catch (e) {}
+
+    // 2. Check Node's process.env (safely cast to avoid 'process not defined' errors)
+    try {
+      if (typeof process !== 'undefined' && (process as any).env) {
+        return (process as any).env[key];
+      }
+    } catch (e) {}
+
+    return undefined;
+  };
+
   const storedKey = localStorage.getItem('user_gemini_api_key');
-  const apiKey = viteEnv?.VITE_API_KEY || (typeof process !== 'undefined' ? process.env?.API_KEY : undefined) || storedKey;
+  const apiKey = getEnvVar('VITE_API_KEY') || getEnvVar('API_KEY') || storedKey;
   
   if (!apiKey) {
     throw new Error("API Key is missing. Please go to Account Settings -> AI Config and enter your Google Gemini API Key.");
