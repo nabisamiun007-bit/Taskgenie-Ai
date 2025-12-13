@@ -6,7 +6,7 @@ import Modal from './components/Modal';
 import ConfirmationModal from './components/ConfirmationModal';
 import AccountSettings from './components/AccountSettings';
 import AuthScreen from './components/AuthScreen';
-import { Plus, Download, Upload, LayoutGrid, List as ListIcon, Search, CheckSquare, X, LogOut, FileSpreadsheet, RefreshCw, Trash2, Cloud, User as UserIcon, MoreVertical, Menu, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, List as ListIcon, Search, CheckSquare, X, RefreshCw, Trash2, User as UserIcon, Menu, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { fetchTasks, saveTask, saveAllTasks, deleteTask, deleteMultipleTasks, isCloudEnabled, subscribeToAuth } from './services/dataService';
 

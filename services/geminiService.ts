@@ -1,8 +1,5 @@
-import { GoogleGenAI, Type, SchemaType } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { AIResponse, Priority } from "../types";
-
-// Fix for "Cannot find name 'process'" in browser environments without Node types
-declare const process: any;
 
 export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> => {
   // Check for Vite env var first (standard for Vercel/Netlify deployments)
