@@ -195,7 +195,7 @@ export const fetchTasks = async (user: User): Promise<Task[]> => {
       description: t.description,
       priority: t.priority,
       status: t.status,
-      due_date: t.due_date,
+      dueDate: t.due_date,
       createdAt: t.created_at,
       subtasks: t.subtasks || [],
       tags: t.tags || [],
