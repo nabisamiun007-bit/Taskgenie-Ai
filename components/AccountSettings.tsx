@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { User } from '../types';
 import { updateUserProfile, changeUserPassword, deleteUserAccount } from '../services/dataService';
-import { UserCog, Lock, Trash2, Save, LogOut, Shield, User as UserIcon, AlertTriangle, Sparkles, Key, Check, Upload } from 'lucide-react';
+import { UserCog, Lock, Trash2, Save, LogOut, Shield, User as UserIcon, AlertTriangle, Check, Upload } from 'lucide-react';
 
 interface AccountSettingsProps {
   user: User;
@@ -13,16 +13,10 @@ interface AccountSettingsProps {
 const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, onLogout, onClose }) => {
   const [username, setUsername] = useState(user.username);
   const [password, setPassword] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'ai'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile');
   const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const storedKey = localStorage.getItem('user_gemini_api_key');
-    if (storedKey) setApiKey(storedKey);
-  }, []);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,17 +85,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
     }
   };
 
-  const handleSaveApiKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (apiKey.trim()) {
-        localStorage.setItem('user_gemini_api_key', apiKey.trim());
-        setStatus({ type: 'success', msg: 'API Key saved locally!' });
-    } else {
-        localStorage.removeItem('user_gemini_api_key');
-        setStatus({ type: 'success', msg: 'API Key removed.' });
-    }
-  };
-
   const handleDeleteAccount = async () => {
     if (window.confirm("DANGER: Are you sure you want to delete your account? All data will be lost permanently.")) {
         await deleteUserAccount(user.id);
@@ -153,7 +136,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
              </div>
         </div>
 
-        {/* Navigation Tabs - Horizontal Scroll on Mobile, Vertical Stack on Desktop */}
+        {/* Navigation Tabs */}
         <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-visible p-2 gap-1 no-scrollbar">
             <button
             onClick={() => { setActiveTab('profile'); setStatus(null); }}
@@ -166,12 +149,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
             className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-lg transition-all ${activeTab === 'security' ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
             >
             <Shield size={18} /> Security
-            </button>
-            <button
-            onClick={() => { setActiveTab('ai'); setStatus(null); }}
-            className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-lg transition-all ${activeTab === 'ai' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
-            >
-            <Sparkles size={18} /> AI Config
             </button>
         </div>
 
@@ -190,7 +167,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
         <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
             {activeTab === 'profile' && <><UserCog className="text-primary-500"/> Edit Profile</>}
             {activeTab === 'security' && <><Lock className="text-primary-500"/> Security</>}
-            {activeTab === 'ai' && <><Sparkles className="text-purple-500"/> AI Settings</>}
         </h2>
 
         {status && (
@@ -280,54 +256,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
                 </div>
             </div>
         )}
-
-        {activeTab === 'ai' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-5 rounded-2xl border border-purple-100 relative overflow-hidden">
-                    <div className="relative z-10">
-                        <h3 className="font-bold text-purple-900 flex items-center gap-2 mb-2">
-                            <Sparkles size={18} /> Google Gemini Integration
-                        </h3>
-                        <p className="text-sm text-purple-800/80 leading-relaxed">
-                            TaskGenie uses AI to help you break down tasks. If the default key is hitting limits, provide your own key below.
-                        </p>
-                        <a 
-                            href="https://aistudio.google.com/app/apikey" 
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="mt-3 inline-flex items-center text-xs font-semibold text-purple-700 bg-white/60 px-3 py-1.5 rounded-full hover:bg-white transition-colors"
-                        >
-                            Get API Key <Key size={12} className="ml-1"/>
-                        </a>
-                    </div>
-                </div>
-
-                <form onSubmit={handleSaveApiKey} className="space-y-4 max-w-md">
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-semibold text-slate-700">Your API Key</label>
-                        <div className="relative group">
-                            <Key size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-purple-500 transition-colors" />
-                            <input
-                                type="password"
-                                value={apiKey}
-                                onChange={(e) => setApiKey(e.target.value)}
-                                placeholder="AIzaSy..."
-                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-100 focus:border-purple-500 outline-none transition-all font-mono text-sm"
-                            />
-                        </div>
-                    </div>
-                    <button
-                        type="submit"
-                        className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 active:scale-95 transition-all text-sm font-medium shadow-lg shadow-purple-200"
-                    >
-                         <Save size={18} /> Save Config
-                    </button>
-                </form>
-            </div>
-        )}
       </div>
       
-      {/* Mobile Logout (Bottom of list in sidebar is hidden on mobile) */}
+      {/* Mobile Logout */}
       <div className="md:hidden p-4 bg-slate-50 border-t border-slate-200">
          <button
             onClick={onLogout}

@@ -1,34 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AIResponse, Priority } from "../types";
+import { AIResponse } from "../types";
 
 export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> => {
-  // Helper to safely get env vars without tripping TypeScript build errors
-  const getEnvVar = (key: string): string | undefined => {
-    // 1. Check Vite's import.meta.env
-    try {
-      const metaEnv = (import.meta as any).env;
-      if (metaEnv && metaEnv[key]) return metaEnv[key];
-    } catch (e) {}
-
-    // 2. Check Node's process.env (safely cast to avoid 'process not defined' errors)
-    try {
-      if (typeof process !== 'undefined' && (process as any).env) {
-        return (process as any).env[key];
-      }
-    } catch (e) {}
-
-    return undefined;
-  };
-
-  const storedKey = localStorage.getItem('user_gemini_api_key');
-  const apiKey = getEnvVar('VITE_API_KEY') || getEnvVar('API_KEY') || storedKey;
-  
-  if (!apiKey) {
-    throw new Error("API Key is missing. Please go to Account Settings -> AI Config and enter your Google Gemini API Key.");
-  }
-
-  // Initialize client inside the function
-  const ai = new GoogleGenAI({ apiKey });
+  // Use process.env.API_KEY as per guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const model = "gemini-2.5-flash";
   
   const prompt = `
@@ -59,22 +34,23 @@ export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> 
                 { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
                 { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
             ],
+            // Casting schema to any to prevent strict TypeScript recursion errors during build
             responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-                description: { type: Type.STRING },
-                priority: { type: Type.STRING, enum: ['Low', 'Medium', 'High', 'Urgent'] },
-                subtasks: { 
-                type: Type.ARRAY, 
-                items: { type: Type.STRING } 
+                type: Type.OBJECT,
+                properties: {
+                    description: { type: Type.STRING },
+                    priority: { type: Type.STRING, enum: ['Low', 'Medium', 'High', 'Urgent'] },
+                    subtasks: { 
+                        type: Type.ARRAY, 
+                        items: { type: Type.STRING } 
+                    },
+                    tags: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                    }
                 },
-                tags: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-                }
-            },
-            required: ["description", "priority", "subtasks", "tags"]
-            }
+                required: ["description", "priority", "subtasks", "tags"]
+            } as any
         }
         });
 
@@ -100,7 +76,7 @@ export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> 
              // Throw specific error messages for better UI feedback
             if (error.message?.includes("API Key")) throw error;
             if (error.status === 403 || error.message?.includes("permission") || error.message?.includes("400")) {
-                throw new Error("Invalid API Key. Please check your key in Settings -> AI Config.");
+                throw new Error("Invalid API Key configuration.");
             }
             throw new Error("Failed to generate content. The AI service might be busy, please try again.");
         }
