@@ -10,8 +10,14 @@ declare var process: {
 };
 
 export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> => {
+  // Validate API Key existence before attempting to use SDK
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error("API Key is missing. Please set VITE_API_KEY in your environment variables.");
+  }
+
   // Use process.env.API_KEY as per guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: apiKey });
   const model = "gemini-2.5-flash";
   
   const prompt = `
@@ -62,9 +68,15 @@ export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> 
         }
         });
 
-        const text = response.text;
+        let text = response.text;
         if (!text) {
             throw new Error("No response received from AI service.");
+        }
+
+        // Clean up potential markdown formatting (```json ... ```)
+        text = text.trim();
+        if (text.startsWith('```')) {
+            text = text.replace(/^```(?:json)?/, '').replace(/```$/, '').trim();
         }
 
         const json = JSON.parse(text) as AIResponse;
@@ -76,15 +88,15 @@ export const enhanceTaskWithAI = async (taskTitle: string): Promise<AIResponse> 
         
         // If it's a permission/key error, don't retry, fail immediately
         if (error.status === 403 || error.message?.includes("API Key") || error.message?.includes("permission")) {
-            throw error;
+             throw new Error("Invalid API Key. Please check your configuration.");
         }
 
         // If we ran out of attempts, throw the error
         if (attempts >= maxAttempts) {
              // Throw specific error messages for better UI feedback
-            if (error.message?.includes("API Key")) throw error;
+            if (error.message?.includes("API Key")) throw new Error("API Key is missing or invalid.");
             if (error.status === 403 || error.message?.includes("permission") || error.message?.includes("400")) {
-                throw new Error("Invalid API Key configuration.");
+                throw new Error("Invalid API Key configuration. Please check your environment variables.");
             }
             throw new Error("Failed to generate content. The AI service might be busy, please try again.");
         }
