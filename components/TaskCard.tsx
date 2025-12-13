@@ -40,114 +40,109 @@ const TaskCard: React.FC<TaskCardProps> = ({
 
   return (
     <div 
-      className={`group relative bg-white rounded-xl border transition-all duration-300 hover:shadow-lg 
-        ${isSelected ? 'border-primary-500 ring-1 ring-primary-500 bg-primary-50/10' : 
-          (isCompleted ? 'border-gray-200 opacity-75' : 
-           isInProgress ? 'border-blue-300 ring-1 ring-blue-100' : 'border-gray-200 hover:border-primary-200')}`}
+      className={`group relative rounded-xl border transition-all duration-500 backdrop-blur-sm
+        ${isCompleted ? 'scale-[0.98] opacity-80' : 'hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-100/50'}
+        ${isSelected 
+            ? 'border-primary-500 ring-1 ring-primary-500 bg-primary-50/80 shadow-lg' 
+            : (isCompleted 
+                ? 'border-gray-100 bg-white/40 shadow-none' 
+                : isInProgress 
+                    ? 'border-blue-200 ring-1 ring-blue-100 bg-white/90 shadow-blue-100/50' 
+                    : 'border-gray-200/60 bg-white/80 shadow-sm shadow-slate-100')}`}
     >
-      <div className="p-5">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex items-start gap-3">
+      {/* Compact padding for mobile (p-3), standard for desktop (sm:p-5) */}
+      <div className="p-3 sm:p-5">
+        <div className="flex justify-between items-start mb-2 sm:mb-3 gap-2">
+          <div className="flex items-start gap-2 sm:gap-3 overflow-hidden">
              {/* Selection & S.No */}
-            <div className="pt-0.5 flex items-center gap-2">
+            <div className="pt-0.5 flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
               <input 
                 type="checkbox"
                 checked={isSelected}
                 onChange={() => onToggleSelection(task.id)}
-                className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer accent-primary-600"
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500 cursor-pointer accent-primary-600"
               />
-              <span className="font-mono text-xs font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+              <span className="font-mono text-[10px] sm:text-xs font-bold text-gray-500 bg-gray-100/80 px-1.5 py-0.5 rounded border border-gray-200">
                 #{task.serialNumber}
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${priorityColors[task.priority]}`}>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border ${priorityColors[task.priority]} shadow-sm`}>
                 {task.priority}
               </span>
               {isInProgress && (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
-                    <Play size={10} fill="currentColor" /> In Progress
+                <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold border bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1 shadow-sm animate-pulse">
+                    <Play size={8} fill="currentColor" /> <span className="hidden xs:inline">In Progress</span>
                 </span>
               )}
               {task.tags.map((tag, idx) => (
-                <span key={idx} className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200 flex items-center gap-1">
+                <span key={idx} className="hidden xs:flex px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-gray-100/80 text-gray-600 border border-gray-200 items-center gap-1 backdrop-blur-sm">
                   <Tag size={10} /> {tag}
                 </span>
               ))}
             </div>
           </div>
           
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Always visible on mobile for accessibility, hover only on desktop */}
+          <div className="flex gap-0.5 sm:gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex-shrink-0">
             <button 
               onClick={() => onEdit(task)}
               className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-              title="Edit"
             >
-              <Edit2 size={16} />
+              <Edit2 size={14} className="sm:w-4 sm:h-4" />
             </button>
             <button 
               onClick={() => onDelete(task.id)}
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-              title="Delete"
             >
-              <Trash2 size={16} />
+              <Trash2 size={14} className="sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>
 
-        <div className="flex items-start gap-3 mb-2 pl-9">
+        <div className="flex items-start gap-2 sm:gap-3 mb-2 pl-0 sm:pl-9">
           {/* Status Controls */}
-          <div className="mt-1 flex-shrink-0 flex gap-2">
-             {/* Main Checkbox */}
+          <div className="mt-0.5 sm:mt-1 flex-shrink-0 flex gap-2">
             <button 
                 onClick={() => onToggleStatus(task)} 
-                className={`transition-colors ${isCompleted ? 'text-green-500' : 'text-gray-300 hover:text-primary-500'}`}
-                title={isCompleted ? "Mark Pending" : "Mark Completed"}
+                className={`transition-all duration-300 ${isCompleted ? 'text-green-500 scale-110' : 'text-gray-300 hover:text-primary-500 hover:scale-105'}`}
             >
-                {isCompleted ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+                {isCompleted ? <CheckCircle2 size={20} className="sm:w-6 sm:h-6" /> : <Circle size={20} className="sm:w-6 sm:h-6" />}
             </button>
             
-            {/* Start Button (Only for Pending) */}
             {!isCompleted && !isInProgress && (
                 <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleStatus({ ...task, status: Status.IN_PROGRESS });
-                    }}
+                    onClick={(e) => { e.stopPropagation(); onToggleStatus({ ...task, status: Status.IN_PROGRESS }); }}
                     className="text-gray-300 hover:text-blue-500 transition-colors"
-                    title="Start Working"
                 >
-                    <Play size={22} />
+                    <Play size={20} className="sm:w-6 sm:h-6" />
                 </button>
             )}
 
-            {/* Pause Button (Only for In Progress) - Revert to Pending */}
             {!isCompleted && isInProgress && (
                 <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleStatus({ ...task, status: Status.PENDING });
-                    }}
+                    onClick={(e) => { e.stopPropagation(); onToggleStatus({ ...task, status: Status.PENDING }); }}
                     className="text-blue-500 hover:text-blue-700 transition-colors"
-                    title="Pause (Set to Pending)"
                 >
-                    <Pause size={22} />
+                    <Pause size={20} className="sm:w-6 sm:h-6" />
                 </button>
             )}
           </div>
 
-          <div className="flex-1">
-            <h3 className={`font-semibold text-lg text-gray-900 leading-tight ${isCompleted ? 'line-through text-gray-500' : ''}`}>
+          <div className="flex-1 min-w-0">
+            {/* Title - Smaller on mobile */}
+            <h3 className={`font-semibold text-sm sm:text-lg text-slate-800 leading-snug truncate sm:whitespace-normal transition-all duration-300 ${isCompleted ? 'line-through text-slate-400 decoration-slate-300' : ''}`}>
               {task.title}
             </h3>
-            <p className="text-sm text-gray-500 mt-1 line-clamp-2">{task.description}</p>
+            {/* Description - Smaller text */}
+            <p className={`text-xs sm:text-sm mt-0.5 sm:mt-1 line-clamp-2 ${isCompleted ? 'text-slate-300' : 'text-slate-500'}`}>{task.description}</p>
             
             {/* Image Thumbnails */}
             {task.images && task.images.length > 0 && (
-                <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
+                <div className={`flex gap-2 mt-2 sm:mt-3 overflow-x-auto pb-1 scrollbar-hide ${isCompleted ? 'opacity-50 grayscale' : ''}`}>
                     {task.images.map((img, i) => (
-                        <div key={i} className="w-16 h-16 flex-shrink-0 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
+                        <div key={i} className="w-10 h-10 sm:w-16 sm:h-16 flex-shrink-0 rounded-md sm:rounded-lg border border-gray-200 overflow-hidden bg-gray-50 shadow-sm">
                             <img src={img} alt="attachment" className="w-full h-full object-cover" />
                         </div>
                     ))}
@@ -156,10 +151,9 @@ const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50 pl-9">
-          <div className="flex items-center text-xs text-gray-400">
-            <Calendar size={14} className="mr-1.5" />
-            {/* Use UTC timezone to prevent date shift when viewing ISO strings in local time */}
+        <div className="flex items-center justify-between mt-2 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-100/50 pl-0 sm:pl-9">
+          <div className="flex items-center text-[10px] sm:text-xs text-gray-400">
+            <Calendar size={12} className="mr-1 sm:mr-1.5" />
             {new Date(task.dueDate).toLocaleDateString(undefined, { 
                 month: 'short', 
                 day: 'numeric', 
@@ -168,15 +162,13 @@ const TaskCard: React.FC<TaskCardProps> = ({
             })}
           </div>
 
-          <div className="flex items-center gap-3">
-             {/* Progress Note Toggle */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {task.progressNotes && (
                  <button 
                  onClick={() => setShowProgress(!showProgress)}
-                 className={`flex items-center gap-1 text-xs font-medium transition-colors ${showProgress ? 'text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
-                 title="View Progress Notes"
+                 className={`flex items-center gap-1 text-[10px] sm:text-xs font-medium transition-colors ${showProgress ? 'text-primary-600' : 'text-gray-400 hover:text-gray-600'}`}
                >
-                 <FileText size={14} />
+                 <FileText size={12} className="sm:w-3.5 sm:h-3.5" />
                  <span className="hidden sm:inline">Progress</span>
                </button>
             )}
@@ -184,16 +176,16 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {totalSubtasks > 0 && (
                 <button 
                 onClick={() => setShowSubtasks(!showSubtasks)}
-                className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
                 >
-                <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="w-10 sm:w-16 h-1 sm:h-1.5 bg-gray-100 rounded-full overflow-hidden">
                     <div 
                     className="h-full bg-primary-500 rounded-full transition-all duration-500"
                     style={{ width: `${progress}%` }}
                     />
                 </div>
                 <span>{completedSubtasks}/{totalSubtasks}</span>
-                {showSubtasks ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+                {showSubtasks ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
                 </button>
             )}
           </div>
@@ -202,9 +194,9 @@ const TaskCard: React.FC<TaskCardProps> = ({
 
        {/* Progress Notes Section */}
        {showProgress && task.progressNotes && (
-        <div className="bg-yellow-50 px-5 py-3 border-t border-yellow-100 animate-in slide-in-from-top-1">
-            <div className="pl-9 text-sm text-gray-700 whitespace-pre-wrap">
-                <span className="font-semibold text-yellow-800 block mb-1 text-xs uppercase tracking-wide">Current Progress:</span>
+        <div className="bg-yellow-50/50 px-3 sm:px-5 py-2 sm:py-3 border-t border-yellow-100/50 animate-in slide-in-from-top-1 backdrop-blur-sm">
+            <div className="pl-0 sm:pl-9 text-xs sm:text-sm text-gray-700 whitespace-pre-wrap">
+                <span className="font-semibold text-yellow-800 block mb-1 text-[10px] sm:text-xs uppercase tracking-wide">Current Progress:</span>
                 {task.progressNotes}
             </div>
         </div>
@@ -212,15 +204,15 @@ const TaskCard: React.FC<TaskCardProps> = ({
 
       {/* Subtasks Dropdown */}
       {showSubtasks && totalSubtasks > 0 && (
-        <div className="bg-gray-50 px-5 py-3 rounded-b-xl border-t border-gray-100 animate-in slide-in-from-top-2">
-          <ul className="space-y-2 pl-9">
+        <div className="bg-gray-50/50 px-3 sm:px-5 py-2 sm:py-3 rounded-b-xl border-t border-gray-100/50 animate-in slide-in-from-top-2 backdrop-blur-sm">
+          <ul className="space-y-1 sm:space-y-2 pl-0 sm:pl-9">
             {task.subtasks.map(sub => (
-              <li key={sub.id} className="flex items-center gap-2 text-sm text-gray-600">
+              <li key={sub.id} className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
                  <button 
                   onClick={() => onToggleSubtask(task.id, sub.id)}
                   className={`${sub.isCompleted ? 'text-green-500' : 'text-gray-400 hover:text-primary-500'}`}
                 >
-                  {sub.isCompleted ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                  {sub.isCompleted ? <CheckCircle2 size={14} className="sm:w-4 sm:h-4" /> : <Circle size={14} className="sm:w-4 sm:h-4" />}
                 </button>
                 <span className={sub.isCompleted ? 'line-through text-gray-400' : ''}>{sub.title}</span>
               </li>

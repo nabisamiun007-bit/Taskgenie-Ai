@@ -125,7 +125,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
                 required
                 value={serialNumber}
                 onChange={(e) => setSerialNumber(parseInt(e.target.value))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-center font-mono"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-center font-mono text-gray-900"
             />
         </div>
 
@@ -139,7 +139,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
                 placeholder="e.g., Plan Marketing Strategy"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all text-gray-900"
             />
             <button
                 type="button"
@@ -165,10 +165,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
           <select
             value={priority}
             onChange={(e) => setPriority(e.target.value as Priority)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white text-gray-900"
           >
             {Object.values(Priority).map((p) => (
-              <option key={p} value={p}>{p}</option>
+              <option key={p} value={p} className="text-gray-900">{p}</option>
             ))}
           </select>
         </div>
@@ -180,7 +180,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
             required
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-gray-900"
           />
         </div>
       </div>
@@ -191,7 +191,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
           rows={3}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none text-gray-900"
           placeholder="Describe the task..."
         />
       </div>
@@ -202,7 +202,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
           rows={3}
           value={progressNotes}
           onChange={(e) => setProgressNotes(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none bg-yellow-50/50"
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none bg-yellow-50/50 text-gray-900"
           placeholder="Write your progress updates here..."
         />
       </div>
@@ -261,7 +261,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
                 type="text"
                 value={st}
                 onChange={(e) => updateSubtask(idx, e.target.value)}
-                className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-1 focus:ring-primary-500 outline-none"
+                className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-1 focus:ring-primary-500 outline-none text-gray-900"
                 placeholder={`Step ${idx + 1}`}
               />
               <button
@@ -286,7 +286,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ initialTask, onSubmit, onCancel, su
             type="text"
             value={tagsInput}
             onChange={(e) => setTagsInput(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none text-gray-900"
             placeholder="Work, Urgent, Review"
           />
       </div>

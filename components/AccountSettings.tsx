@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from '../types';
 import { updateUserProfile, changeUserPassword, deleteUserAccount } from '../services/dataService';
-import { UserCog, Lock, Trash2, Save, LogOut, Shield, User as UserIcon, AlertTriangle, Sparkles, Key, Check } from 'lucide-react';
+import { UserCog, Lock, Trash2, Save, LogOut, Shield, User as UserIcon, AlertTriangle, Sparkles, Key, Check, Upload } from 'lucide-react';
 
 interface AccountSettingsProps {
   user: User;
@@ -17,9 +17,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'ai'>('profile');
   const [status, setStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Load existing key from local storage
     const storedKey = localStorage.getItem('user_gemini_api_key');
     if (storedKey) setApiKey(storedKey);
   }, []);
@@ -40,6 +40,31 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
       setStatus({ type: 'error', msg: 'An error occurred' });
     } finally {
         setLoading(false);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+        setLoading(true);
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+             const base64 = reader.result as string;
+             try {
+                const res = await updateUserProfile(user.username, base64);
+                if (res.success) {
+                    onUpdateUser({ ...user, avatar: base64 });
+                    setStatus({ type: 'success', msg: 'Profile picture updated!' });
+                } else {
+                    setStatus({ type: 'error', msg: res.error || 'Failed to update picture' });
+                }
+             } catch (err) {
+                setStatus({ type: 'error', msg: 'Failed to upload image' });
+             } finally {
+                setLoading(false);
+             }
+        }
+        reader.readAsDataURL(file);
     }
   };
 
@@ -83,96 +108,127 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
         onLogout();
     }
   };
-
-  const InitialsAvatar = () => (
-    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary-400 to-indigo-500 flex items-center justify-center text-white text-2xl font-bold shadow-md">
-        {user.username.substring(0, 2).toUpperCase()}
-    </div>
-  );
+  
+  const getInitials = (name: string) => {
+      return name
+        .split(' ')
+        .map(word => word[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
+  };
 
   return (
-    <div className="flex flex-col md:flex-row h-[500px]">
-      {/* Sidebar */}
-      <div className="w-full md:w-64 bg-gray-50 p-4 border-b md:border-b-0 md:border-r border-gray-100 flex flex-col gap-2">
-        <div className="mb-6 flex flex-col items-center text-center">
-             {user.avatar ? <img src={user.avatar} className="w-16 h-16 rounded-full mb-3" /> : <InitialsAvatar />}
-             <h3 className="font-semibold text-gray-900">{user.username}</h3>
-             <p className="text-xs text-gray-500 truncate max-w-full px-2">{user.email}</p>
+    <div className="flex flex-col md:flex-row h-full md:h-[500px]">
+      {/* Sidebar / Tabs */}
+      <div className="w-full md:w-64 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col shrink-0">
+        {/* User Info - Compact on Mobile */}
+        <div className="p-4 md:p-6 flex flex-row md:flex-col items-center gap-4 text-left md:text-center border-b border-slate-200 md:border-0">
+             <div className="relative group">
+                <div className="w-12 h-12 md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm ring-2 ring-white shrink-0 bg-gray-200 flex items-center justify-center">
+                    {user.avatar ? (
+                        <img src={user.avatar} className="w-full h-full object-cover" alt="Profile" />
+                    ) : (
+                        <span className="text-sm md:text-2xl font-bold text-gray-500">{getInitials(user.username)}</span>
+                    )}
+                </div>
+                <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute bottom-0 right-0 bg-white shadow-md p-1.5 rounded-full text-slate-600 hover:text-primary-600 border border-slate-100 hover:border-primary-200 transition-all"
+                    title="Upload Photo"
+                >
+                    <Upload size={12} />
+                </button>
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleImageUpload} 
+                    accept="image/*" 
+                    className="hidden" 
+                />
+             </div>
+             <div className="flex-1 overflow-hidden">
+                 <h3 className="font-bold text-slate-800 truncate text-lg">{user.username}</h3>
+                 <p className="text-xs text-slate-500 truncate">{user.email}</p>
+             </div>
         </div>
 
-        <button
-          onClick={() => { setActiveTab('profile'); setStatus(null); }}
-          className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${activeTab === 'profile' ? 'bg-white text-primary-600 shadow-sm ring-1 ring-gray-100' : 'text-gray-600 hover:bg-gray-100'}`}
-        >
-          <UserIcon size={18} /> Profile
-        </button>
-        <button
-          onClick={() => { setActiveTab('security'); setStatus(null); }}
-          className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${activeTab === 'security' ? 'bg-white text-primary-600 shadow-sm ring-1 ring-gray-100' : 'text-gray-600 hover:bg-gray-100'}`}
-        >
-          <Shield size={18} /> Security
-        </button>
-        <button
-          onClick={() => { setActiveTab('ai'); setStatus(null); }}
-          className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all ${activeTab === 'ai' ? 'bg-white text-purple-600 shadow-sm ring-1 ring-gray-100' : 'text-gray-600 hover:bg-gray-100'}`}
-        >
-          <Sparkles size={18} /> AI Config
-        </button>
+        {/* Navigation Tabs - Horizontal Scroll on Mobile, Vertical Stack on Desktop */}
+        <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-visible p-2 gap-1 no-scrollbar">
+            <button
+            onClick={() => { setActiveTab('profile'); setStatus(null); }}
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-lg transition-all ${activeTab === 'profile' ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+            >
+            <UserIcon size={18} /> Profile
+            </button>
+            <button
+            onClick={() => { setActiveTab('security'); setStatus(null); }}
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-lg transition-all ${activeTab === 'security' ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+            >
+            <Shield size={18} /> Security
+            </button>
+            <button
+            onClick={() => { setActiveTab('ai'); setStatus(null); }}
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-lg transition-all ${activeTab === 'ai' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+            >
+            <Sparkles size={18} /> AI Config
+            </button>
+        </div>
 
-        <div className="mt-auto pt-4 border-t border-gray-200">
+        <div className="hidden md:block mt-auto p-4 border-t border-slate-200">
             <button
                 onClick={onLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all"
             >
                 <LogOut size={18} /> Sign Out
             </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 p-6 md:p-8 overflow-y-auto">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">
-            {activeTab === 'profile' ? 'Edit Profile' : activeTab === 'security' ? 'Security Settings' : 'AI Configuration'}
+      {/* Main Content Area */}
+      <div className="flex-1 p-5 md:p-8 overflow-y-auto bg-white">
+        <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+            {activeTab === 'profile' && <><UserCog className="text-primary-500"/> Edit Profile</>}
+            {activeTab === 'security' && <><Lock className="text-primary-500"/> Security</>}
+            {activeTab === 'ai' && <><Sparkles className="text-purple-500"/> AI Settings</>}
         </h2>
 
         {status && (
-            <div className={`mb-6 p-4 rounded-xl flex items-start gap-3 border ${status.type === 'success' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-               {status.type === 'error' && <AlertTriangle size={20} className="shrink-0" />}
-               {status.type === 'success' && <Check size={20} className="shrink-0" />}
+            <div className={`mb-6 p-4 rounded-xl flex items-start gap-3 border animate-in slide-in-from-top-2 ${status.type === 'success' ? 'bg-green-50 text-green-700 border-green-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+               {status.type === 'error' ? <AlertTriangle size={20} className="shrink-0" /> : <Check size={20} className="shrink-0" />}
                <span className="text-sm font-medium">{status.msg}</span>
             </div>
         )}
 
         {activeTab === 'profile' && (
-            <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">Username</label>
-                    <div className="relative">
-                        <UserCog size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <form onSubmit={handleUpdateProfile} className="space-y-5 max-w-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="space-y-1.5">
+                    <label className="block text-sm font-semibold text-slate-700">Display Name</label>
+                    <div className="relative group">
+                        <UserCog size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
                         <input
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none transition-all"
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-100 focus:border-primary-500 outline-none transition-all"
                         />
                     </div>
                 </div>
-                <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">Email Address</label>
+                <div className="space-y-1.5">
+                    <label className="block text-sm font-semibold text-slate-700">Email Address</label>
                     <input
                         type="email"
                         value={user.email}
                         disabled
-                        className="w-full px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-gray-500 cursor-not-allowed"
+                        className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed"
                     />
-                    <p className="text-xs text-gray-400">To change your email, please contact support.</p>
                 </div>
                 
                 <div className="pt-4">
                     <button
                         type="submit"
                         disabled={loading}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors text-sm font-medium shadow-lg shadow-primary-200"
+                        className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 active:scale-95 transition-all text-sm font-medium shadow-lg shadow-primary-200"
                     >
                         {loading ? 'Saving...' : <><Save size={18} /> Save Changes</>}
                     </button>
@@ -182,93 +238,103 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ user, onUpdateUser, o
 
         {activeTab === 'security' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <form onSubmit={handleChangePassword} className="space-y-6 max-w-md">
-                    <div className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700">New Password</label>
-                        <div className="relative">
-                            <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <form onSubmit={handleChangePassword} className="space-y-5 max-w-md">
+                    <div className="space-y-1.5">
+                        <label className="block text-sm font-semibold text-slate-700">New Password</label>
+                        <div className="relative group">
+                            <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" />
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="Minimum 6 characters"
-                                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white outline-none transition-all"
+                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-100 focus:border-primary-500 outline-none transition-all"
                             />
                         </div>
                     </div>
                     <button
                         type="submit"
                         disabled={!password || loading}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition-colors text-sm font-medium disabled:opacity-50"
+                        className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-900 active:scale-95 transition-all text-sm font-medium disabled:opacity-50 disabled:active:scale-100"
                     >
                          {loading ? 'Updating...' : <><Lock size={16} /> Update Password</>}
                     </button>
                 </form>
 
-                <div className="pt-8 border-t border-gray-100">
-                    <h4 className="text-sm font-bold text-red-600 mb-4 uppercase tracking-wider flex items-center gap-2">
-                        <AlertTriangle size={16}/> Danger Zone
-                    </h4>
-                    <p className="text-sm text-gray-500 mb-4">
-                        Deleting your account is permanent. All your tasks and data will be wiped immediately.
-                    </p>
-                    <button
-                        type="button"
-                        onClick={handleDeleteAccount}
-                        className="flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 bg-red-50 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
-                    >
-                        <Trash2 size={16} /> Delete My Account
-                    </button>
+                <div className="pt-6 border-t border-slate-100">
+                    <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                        <h4 className="text-sm font-bold text-red-700 mb-2 uppercase tracking-wider flex items-center gap-2">
+                            <AlertTriangle size={16}/> Danger Zone
+                        </h4>
+                        <p className="text-xs text-red-600/80 mb-4">
+                            Permanently delete your account and all associated tasks. This action cannot be undone.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={handleDeleteAccount}
+                            className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 bg-white rounded-lg hover:bg-red-50 hover:text-red-700 transition-colors text-sm font-medium"
+                        >
+                            <Trash2 size={16} /> Delete My Account
+                        </button>
+                    </div>
                 </div>
             </div>
         )}
 
         {activeTab === 'ai' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
-                    <h3 className="font-semibold text-purple-900 flex items-center gap-2 mb-2">
-                        <Sparkles size={18} /> Google Gemini AI
-                    </h3>
-                    <p className="text-sm text-purple-800">
-                        TaskGenie uses Gemini AI to auto-generate tasks. If you see an "API Key Missing" error, you can paste your own personal API key below.
-                    </p>
-                    <a 
-                        href="https://aistudio.google.com/app/apikey" 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="text-xs text-purple-600 hover:text-purple-800 underline mt-2 inline-block font-medium"
-                    >
-                        Get a free API Key from Google AI Studio &rarr;
-                    </a>
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-5 rounded-2xl border border-purple-100 relative overflow-hidden">
+                    <div className="relative z-10">
+                        <h3 className="font-bold text-purple-900 flex items-center gap-2 mb-2">
+                            <Sparkles size={18} /> Google Gemini Integration
+                        </h3>
+                        <p className="text-sm text-purple-800/80 leading-relaxed">
+                            TaskGenie uses AI to help you break down tasks. If the default key is hitting limits, provide your own key below.
+                        </p>
+                        <a 
+                            href="https://aistudio.google.com/app/apikey" 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="mt-3 inline-flex items-center text-xs font-semibold text-purple-700 bg-white/60 px-3 py-1.5 rounded-full hover:bg-white transition-colors"
+                        >
+                            Get API Key <Key size={12} className="ml-1"/>
+                        </a>
+                    </div>
                 </div>
 
                 <form onSubmit={handleSaveApiKey} className="space-y-4 max-w-md">
-                    <div className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700">Custom API Key</label>
-                        <div className="relative">
-                            <Key size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <div className="space-y-1.5">
+                        <label className="block text-sm font-semibold text-slate-700">Your API Key</label>
+                        <div className="relative group">
+                            <Key size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-purple-500 transition-colors" />
                             <input
                                 type="password"
                                 value={apiKey}
                                 onChange={(e) => setApiKey(e.target.value)}
                                 placeholder="AIzaSy..."
-                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-all font-mono text-sm"
+                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-100 focus:border-purple-500 outline-none transition-all font-mono text-sm"
                             />
                         </div>
-                        <p className="text-xs text-gray-400">
-                            This key is stored locally on your device browser.
-                        </p>
                     </div>
                     <button
                         type="submit"
-                        className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors text-sm font-medium shadow-lg shadow-purple-200"
+                        className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 active:scale-95 transition-all text-sm font-medium shadow-lg shadow-purple-200"
                     >
-                         <Save size={18} /> Save API Key
+                         <Save size={18} /> Save Config
                     </button>
                 </form>
             </div>
         )}
-
+      </div>
+      
+      {/* Mobile Logout (Bottom of list in sidebar is hidden on mobile) */}
+      <div className="md:hidden p-4 bg-slate-50 border-t border-slate-200">
+         <button
+            onClick={onLogout}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all"
+        >
+            <LogOut size={18} /> Sign Out
+        </button>
       </div>
     </div>
   );
